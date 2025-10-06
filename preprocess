@@ -1,0 +1,39 @@
+import os
+import re
+import docx
+from pathlib import Path
+
+source_dir = Path('./documents')
+processed_dir = Path('./processed_documents')
+processed_dir.mkdir(exist_ok=True)
+
+def clean_text(text):
+    text = re.sub(r'\n+', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'[^\w\s.,!?;:()\-]', '', text)
+    text = re.sub(r'(\w)-\s*\n?\s*(\w)', r'\1\2', text)
+    text = re.sub(r'\.\s+', '. ', text)
+    text = re.sub(r'\s+([.,!?;:)])', r'\1', text)
+    text = re.sub(r'([(])\s+', r'\1', text)
+    return text.strip()
+
+def process_docx_files():
+    for docx_path in source_dir.glob('*.docx'):
+        try:
+            doc = docx.Document(docx_path)
+            full_text = []
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    full_text.append(paragraph.text)
+            
+            cleaned_text = clean_text('\n'.join(full_text))
+            
+            output_path = processed_dir / f'{docx_path.stem}_processed.txt'
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(cleaned_text)
+            print(f'Processed: {docx_path.name}')
+        except Exception as e:
+            print(f'Error processing {docx_path.name}: {str(e)}')
+
+if __name__ == "__main__":
+    process_docx_files()
