@@ -1,0 +1,48 @@
+python-docx
+github.com/python-openxml/python-docx
+MIT
+✅ Да
+Чтение
+.docx
+jupyterlab
+github.com/jupyterlab/jupyterlab
+BSD-3-Clause
+✅ Да
+Интерактивная среда
+sentence-transformers
+github.com/UKPLab/sentence-transformers
+Apache 2.0
+✅ Да
+Эмбеддинги текста
+faiss-cpu
+github.com/facebookresearch/faiss
+MIT / BSD
+✅ Да
+Поиск ближайших соседей
+langchain
+github.com/langchain-ai/langchain
+MIT
+✅ Да
+Фреймворк для RAG
+transformers
+github.com/huggingface/transformers
+Apache 2.0
+✅ Да
+Работа с LLM
+torch (PyTorch)
+github.com/pytorch/pytorch
+BSD
+✅ Да
+Машинное обучение (CPU-версия)
+unstructured
+github.com/unstructured-io/unstructured
+Apache 2.0
+✅ Да
+Парсинг PDF, DOCX и др.
+pypdf
+github.com/py-pdf/pypdf
+BSD
+✅ Да
+Работа с PDF
+
+  
