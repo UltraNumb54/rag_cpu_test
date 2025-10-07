@@ -1,0 +1,133 @@
+Ячейка 1: Импорты и пути
+
+import os
+import numpy as np
+from pathlib import Path
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import chromadb
+from chromadb.utils import embedding_functions
+Ячейка 2: Загрузка обработанных текстов
+
+# Пути
+processed_dir = Path('./processed_documents')
+
+# Списки для хранения данных
+documents = []      # оригинальные тексты (для вывода)
+sources = []        # имена файлов
+
+# Загружаем все .txt из processed_documents
+for txt_path in processed_dir.glob('*.txt'):
+    try:
+        with open(txt_path, 'r', encoding='utf-8') as f:
+            text = f.read().strip()
+            if text:  # пропускаем пустые файлы
+                documents.append(text)
+                sources.append(txt_path.name)
+                print(f"Загружен: {txt_path.name}")
+    except Exception as e:
+        print(f"Ошибка при чтении {txt_path}: {e}")
+
+print(f"\nВсего загружено документов: {len(documents)}")
+Ячейка 3: Создание TF-IDF векторизатора
+python
+
+# Создаём TF-IDF векторизатор
+vectorizer = TfidfVectorizer(
+    analyzer='word',
+    token_pattern=r'(?u)\b[\wа-яё]{2,}\b',  # только слова длиной ≥2, включая русские
+    lowercase=True,                         # приводим к нижнему регистру
+    max_features=10000,                     # ограничиваем словарь
+    ngram_range=(1, 2),                     # unigrams + bigrams → лучше для поиска
+    dtype=np.float32                        # экономим память
+)
+
+# Обучаем и преобразуем документы в TF-IDF матрицу
+tfidf_matrix = vectorizer.fit_transform(documents)
+print(f"TF-IDF матрица создана. Форма: {tfidf_matrix.shape}")
+Ячейка 4: Сохранение в ChromaDB (локально, persistent)
+python
+
+# Преобразуем sparse-матрицу в dense (Chroma требует list[list[float]])
+tfidf_dense = tfidf_matrix.toarray()
+
+# Настройка ChromaDB
+persist_dir = Path("./chroma_tfidf_rag")
+persist_dir.mkdir(exist_ok=True)
+
+client = chromadb.PersistentClient(path=str(persist_dir))
+
+collection_name = "russian_docs_tfidf"
+
+# Удаляем старую коллекцию, если есть
+try:
+    client.delete_collection(collection_name)
+except:
+    pass
+
+# Создаём новую коллекцию (без встроенной embedding function — мы передаём векторы сами)
+collection = client.create_collection(
+    name=collection_name,
+    metadata={"hnsw:space": "cosine"}
+)
+
+# Подготавливаем данные для Chroma
+ids = [f"doc_{i}" for i in range(len(documents))]
+metadatas = [{"source": src} for src in sources]
+embeddings = tfidf_dense.tolist()  # Chroma принимает Python list
+
+# Добавляем в базу
+collection.add(
+    ids=ids,
+    documents=documents,      # оригинальные тексты
+    metadatas=metadatas,
+    embeddings=embeddings
+)
+
+print("Данные успешно сохранены в ChromaDB!")
+Ячейка 5: Функция поиска (RAG на TF-IDF)
+def rag_search(query: str, n_results: int = 3):
+    """
+    Выполняет поиск по запросу с использованием TF-IDF + косинусного сходства.
+    """
+    # Предобработка запроса: приведение к нижнему регистру (TF-IDF делает это автоматически)
+    # Но для единообразия — убедимся, что нет мусора
+    query_clean = re.sub(r'[^\w\sа-яё.,!?;:()\-]', ' ', query.lower())
+    query_clean = re.sub(r'\s+', ' ', query_clean).strip()
+    
+    if not query_clean:
+        print("Пустой запрос.")
+        return
+    
+    # Преобразуем запрос в TF-IDF вектор
+    query_vec = vectorizer.transform([query_clean]).toarray()
+    
+    # Считаем косинусное сходство со всеми документами
+    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    
+    # Получаем индексы топ-N результатов
+    top_indices = np.argsort(similarities)[-n_results:][::-1]
+    
+    print(f"Запрос: \"{query}\"\n")
+    found = False
+    for i, idx in enumerate(top_indices):
+        score = float(similarities[idx])
+        if score < 0.05:  # порог релевантности (настрой по желанию)
+            continue
+        found = True
+        print(f"--- Результат {i+1} (релевантность: {score:.4f}) ---")
+        print(f"Источник: {sources[idx]}")
+        # Показываем первые 600 символов
+        snippet = documents[idx][:600]
+        print(snippet + "..." if len(snippet) == 600 else snippet)
+        print()
+    
+    if not found:
+        print("Нет релевантных результатов.")
+
+import re
+Ячейка 6: Примеры использования
+# Примеры запросов на русском
+rag_search("Как происходит авторизация в системе?", n_results=2)
+rag_search("Где хранятся данные пользователей?", n_results=3)
+rag_search("Как восстановить пароль?", n_results=2)
